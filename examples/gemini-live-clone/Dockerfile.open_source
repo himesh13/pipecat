@@ -1,0 +1,37 @@
+#
+# Copyright (c) 2024-2026, Daily
+#
+# SPDX-License-Identifier: BSD 2-Clause License
+#
+
+# Dockerfile for the Open-Source variant (server_open_source.py).
+# Uses Whisper (STT), Ollama (LLM), and Kokoro (TTS) — all local, no API keys required.
+#
+# Build:
+#   docker build -f Dockerfile.open_source -t gemini-live-clone-oss .
+#
+# Run (requires a running Ollama instance):
+#   docker run -p 7860:7860 -e OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 gemini-live-clone-oss
+#
+# Or use docker compose (Ollama is included automatically):
+#   docker compose --profile open-source up
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# ffmpeg is required by faster-whisper for audio decoding
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pipecat with runner, Silero VAD, Whisper STT, and Kokoro TTS extras
+RUN pip install --no-cache-dir "pipecat-ai[runner,silero,whisper,kokoro]"
+
+# Copy application code
+COPY server_open_source.py .
+COPY static/ static/
+
+EXPOSE 7860
+
+CMD ["python", "server_open_source.py"]

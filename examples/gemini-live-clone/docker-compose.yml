@@ -1,0 +1,51 @@
+# docker-compose.yml for Gemini Live Clone
+#
+# Two profiles are available — start only the one you need:
+#
+#   Gemini Live (requires GOOGLE_API_KEY in .env):
+#     docker compose --profile gemini up
+#
+#   Open-Source / cost-free (no API keys needed):
+#     docker compose --profile open-source up
+#
+# The open-source profile starts an Ollama container automatically.
+# On first run, pull your preferred model:
+#   docker compose --profile open-source exec ollama ollama pull llama3.2
+
+services:
+
+  # ── Option A: Gemini Live ────────────────────────────────────────────────────
+  gemini:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-7860}:7860"
+    env_file:
+      - .env
+    profiles: ["gemini"]
+
+  # ── Option B: Open-Source ────────────────────────────────────────────────────
+  open-source:
+    build:
+      context: .
+      dockerfile: Dockerfile.open_source
+    ports:
+      - "${PORT:-7860}:7860"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+    depends_on:
+      - ollama
+    profiles: ["open-source"]
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles: ["open-source"]
+
+volumes:
+  ollama_data:

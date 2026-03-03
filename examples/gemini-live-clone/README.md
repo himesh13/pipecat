@@ -19,6 +19,36 @@ conversations to specialised agents or trigger background automations — see
 
 ---
 
+## 🐳 Quick Start with Docker
+
+The easiest way to run either variant — no local Python setup required.
+
+### Option A — Gemini Live (Docker)
+
+```bash
+cp .env.example .env          # add your GOOGLE_API_KEY
+docker compose --profile gemini up
+```
+
+Open **http://localhost:7860**.
+
+### Option B — Open-Source (Docker)
+
+```bash
+# Start the server and an Ollama container together
+docker compose --profile open-source up
+
+# In a separate terminal, pull a model (first run only)
+docker compose --profile open-source exec ollama ollama pull llama3.2
+```
+
+Open **http://localhost:7860**.
+
+> **Note:** Whisper and Kokoro download their model files on first run inside
+> the container (~500 MB each). Subsequent starts are immediate.
+
+---
+
 ## Option A — Gemini Live (`server.py`)
 
 Best quality, lowest latency. Requires a Google AI Studio API key.
@@ -210,7 +240,7 @@ Common integration targets:
 |----------|---------|------------|
 | `GOOGLE_API_KEY` | *(required)* | `server.py` only |
 | `OLLAMA_MODEL` | `llama3.2` | `server_open_source.py` only |
-| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | `server_open_source.py` only |
+| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | `server_open_source.py` only (auto-set to `http://ollama:11434/v1` in Docker) |
 | `HOST` | `0.0.0.0` | Both |
 | `PORT` | `7860` | Both |
 
