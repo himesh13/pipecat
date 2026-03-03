@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Live</title>
+  <style>
+    /* ─── Reset & base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d0d0d;
+      --surface:     #1a1a1a;
+      --border:      #2e2e2e;
+      --text-primary:   #e8eaed;
+      --text-secondary: #9aa0a6;
+      --blue:        #8ab4f8;
+      --green:       #81c995;
+      --red:         #f28b82;
+      --purple:      #c58af9;
+      --radius:      16px;
+    }
+
+    body {
+      font-family: "Google Sans", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ─── Header ───────────────────────────────────────────────────────── */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 24px;
+      z-index: 10;
+    }
+
+    .gemini-logo {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 500;
+      background: linear-gradient(90deg, #8ab4f8, #c58af9, #f28b82);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ─── Main stage ───────────────────────────────────────────────────── */
+    .stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+      padding: 20px;
+    }
+
+    /* ─── Orb visualiser ───────────────────────────────────────────────── */
+    .orb-wrapper {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Pulsing ring layers */
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0;
+      animation: none;
+    }
+    .ring-1 { width: 200px; height: 200px; }
+    .ring-2 { width: 170px; height: 170px; }
+    .ring-3 { width: 140px; height: 140px; }
+
+    /* Core orb */
+    .orb {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: conic-gradient(
+        from 0deg,
+        #8ab4f8 0%, #c58af9 33%, #f28b82 66%, #8ab4f8 100%
+      );
+      box-shadow: 0 0 40px #8ab4f840, 0 0 80px #c58af920;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      animation: spin 8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ── State: idle ──── */
+    body[data-state="idle"] .orb {
+      filter: grayscale(80%) brightness(0.5);
+      animation: none;
+      transform: scale(0.85);
+      box-shadow: none;
+    }
+
+    /* ── State: connecting ──── */
+    body[data-state="connecting"] .orb {
+      animation: spin 4s linear infinite, pulse-scale 1s ease-in-out infinite;
+    }
+
+    /* ── State: listening ──── */
+    body[data-state="listening"] .ring {
+      animation: ripple 2s ease-out infinite;
+    }
+    body[data-state="listening"] .ring-2 { animation-delay: 0.4s; }
+    body[data-state="listening"] .ring-3 { animation-delay: 0.8s; }
+    body[data-state="listening"] .ring { background: #8ab4f8; }
+    body[data-state="listening"] .orb {
+      animation: spin 6s linear infinite;
+      box-shadow: 0 0 60px #8ab4f860, 0 0 100px #8ab4f830;
+    }
+
+    /* ── State: speaking ──── */
+    body[data-state="speaking"] .ring {
+      animation: ripple 1.2s ease-out infinite;
+    }
+    body[data-state="speaking"] .ring-2 { animation-delay: 0.25s; }
+    body[data-state="speaking"] .ring-3 { animation-delay: 0.5s; }
+    body[data-state="speaking"] .ring { background: #c58af9; }
+    body[data-state="speaking"] .orb {
+      animation: spin 3s linear infinite;
+      box-shadow: 0 0 60px #c58af960, 0 0 120px #c58af940;
+      transform: scale(1.08);
+    }
+
+    @keyframes ripple {
+      0%   { opacity: 0.45; transform: scale(0.85); }
+      100% { opacity: 0;    transform: scale(1.15); }
+    }
+
+    @keyframes pulse-scale {
+      0%, 100% { transform: scale(1); }
+      50%       { transform: scale(1.06); }
+    }
+
+    /* ─── Status label ─────────────────────────────────────────────────── */
+    .status-label {
+      font-size: 0.95rem;
+      font-weight: 400;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+      height: 20px;
+      transition: opacity 0.25s;
+    }
+
+    /* ─── Control bar ──────────────────────────────────────────────────── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* Primary action button */
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+
+    .btn-primary:active { transform: scale(0.96); }
+
+    .btn-start {
+      background: linear-gradient(135deg, #8ab4f8, #c58af9);
+      color: #0d0d0d;
+      box-shadow: 0 4px 20px #8ab4f840;
+    }
+    .btn-start:hover { box-shadow: 0 4px 30px #8ab4f860; }
+
+    .btn-end {
+      background: #2e2e2e;
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn-end:hover { background: #3a3a3a; }
+
+    /* Mute toggle */
+    .btn-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .btn-icon:hover  { background: #2a2a2a; }
+    .btn-icon:active { transform: scale(0.92); }
+    .btn-icon.muted  { background: var(--red); color: #0d0d0d; border-color: var(--red); }
+
+    /* Hidden while disconnected */
+    .btn-icon, .btn-end { display: none; }
+
+    body[data-state="listening"] .btn-icon,
+    body[data-state="speaking"]  .btn-icon,
+    body[data-state="listening"] .btn-end,
+    body[data-state="speaking"]  .btn-end  { display: flex; }
+
+    body[data-state="idle"] .btn-start,
+    body[data-state="connecting"] .btn-start { display: flex; }
+    body[data-state="listening"] .btn-start,
+    body[data-state="speaking"]  .btn-start  { display: none; }
+
+    body[data-state="connecting"] .btn-start { opacity: 0.6; pointer-events: none; }
+
+    /* ─── Transcript ticker ────────────────────────────────────────────── */
+    .transcript {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: min(600px, 90vw);
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      min-height: 24px;
+      transition: opacity 0.3s;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* ─── Error banner ─────────────────────────────────────────────────── */
+    .error-banner {
+      display: none;
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #3b1616;
+      border: 1px solid var(--red);
+      border-radius: 12px;
+      padding: 10px 20px;
+      font-size: 0.85rem;
+      color: var(--red);
+      max-width: 400px;
+      text-align: center;
+    }
+    .error-banner.visible { display: block; }
+  </style>
+</head>
+<body data-state="idle">
+
+  <!-- ── Header ── -->
+  <header>
+    <svg class="gemini-logo" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#8ab4f8"/>
+          <stop offset="50%"  stop-color="#c58af9"/>
+          <stop offset="100%" stop-color="#f28b82"/>
+        </linearGradient>
+      </defs>
+      <!-- Gemini-inspired 4-pointed star -->
+      <path d="M14 2 C14 2 14 10 14 14 C14 14 6 14 2 14 C2 14 10 14 14 14 C14 14 14 22 14 26 C14 26 14 18 14 14 C14 14 22 14 26 14 C26 14 18 14 14 14 C14 14 14 6 14 2 Z"
+            fill="url(#g1)" stroke="none"/>
+    </svg>
+    <h1>Gemini Live</h1>
+  </header>
+
+  <!-- ── Error banner ── -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- ── Main stage ── -->
+  <main class="stage">
+
+    <!-- Orb + ripple rings -->
+    <div class="orb-wrapper">
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-3"></div>
+      <div class="orb"></div>
+    </div>
+
+    <!-- Status text -->
+    <p class="status-label" id="statusLabel">Click to start a conversation</p>
+
+    <!-- Buttons -->
+    <div class="controls">
+      <!-- Mute toggle (visible when connected) -->
+      <button class="btn-icon" id="muteBtn" title="Mute / unmute microphone" onclick="toggleMute()">
+        <svg id="micIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 13.93A8.001 8.001 0 0 1 4 9H6a6 6 0 0 0 12 0h2a8.001 8.001 0 0 1-7 6.93V19h3v2H8v-2h3v-2.07z"/>
+        </svg>
+      </button>
+
+      <!-- Start button -->
+      <button class="btn-primary btn-start" onclick="startConversation()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 13.93A8.001 8.001 0 0 1 4 9H6a6 6 0 0 0 12 0h2a8.001 8.001 0 0 1-7 6.93V19h3v2H8v-2h3v-2.07z"/>
+        </svg>
+        Start conversation
+      </button>
+
+      <!-- End button -->
+      <button class="btn-primary btn-end" onclick="endConversation()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h12v12H6z"/>
+        </svg>
+        End
+      </button>
+    </div>
+  </main>
+
+  <!-- ── Transcript ── -->
+  <div class="transcript" id="transcript"></div>
+
+  <script>
+    // ─── State management ────────────────────────────────────────────────
+    const STATE = { IDLE: "idle", CONNECTING: "connecting", LISTENING: "listening", SPEAKING: "speaking" };
+
+    // Audio level thresholds (0–255 scale from AnalyserNode byte frequency data).
+    // LOCAL_AUDIO_THRESHOLD: average power above which microphone input is considered speech.
+    const LOCAL_AUDIO_THRESHOLD = 6;
+    // REMOTE_AUDIO_THRESHOLD: average power above which the agent is considered to be speaking.
+    const REMOTE_AUDIO_THRESHOLD = 3;
+
+    let state = STATE.IDLE;
+    let pc = null;         // RTCPeerConnection
+    let localStream = null;
+    let muted = false;
+    let pcId = null;
+
+    const statusMap = {
+      [STATE.IDLE]:       "Click to start a conversation",
+      [STATE.CONNECTING]: "Connecting…",
+      [STATE.LISTENING]:  "Listening…",
+      [STATE.SPEAKING]:   "Gemini is speaking…",
+    };
+
+    function setState(s) {
+      state = s;
+      document.body.dataset.state = s;
+      document.getElementById("statusLabel").textContent = statusMap[s] || "";
+    }
+
+    // ─── Error helpers ───────────────────────────────────────────────────
+    function showError(msg) {
+      const el = document.getElementById("errorBanner");
+      el.textContent = msg;
+      el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 8000);
+    }
+
+    // ─── Transcript helper ───────────────────────────────────────────────
+    let transcriptTimer = null;
+    function showTranscript(text) {
+      const el = document.getElementById("transcript");
+      el.textContent = text;
+      clearTimeout(transcriptTimer);
+      if (text) transcriptTimer = setTimeout(() => el.textContent = "", 5000);
+    }
+
+    // ─── WebRTC connection ───────────────────────────────────────────────
+    async function startConversation() {
+      if (state !== STATE.IDLE) return;
+      setState(STATE.CONNECTING);
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch (err) {
+        showError("Microphone access denied. Please allow microphone access and try again.");
+        setState(STATE.IDLE);
+        return;
+      }
+
+      pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+      // Receive remote audio (AI speech) and monitor its level for visual feedback
+      const remoteAudio = new Audio();
+      remoteAudio.autoplay = true;
+      let remoteMonitorStarted = false;
+      pc.ontrack = (evt) => {
+        if (evt.streams && evt.streams[0]) {
+          remoteAudio.srcObject = evt.streams[0];
+          if (!remoteMonitorStarted) {
+            remoteMonitorStarted = true;
+            _monitorRemoteAudio(remoteAudio);
+          }
+        }
+      };
+
+      // Send local audio (microphone)
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      // Detect speaking/listening from audio level (simple heuristic)
+      _startAudioLevelMonitor(localStream);
+
+      // Gather all ICE candidates before sending offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === "complete") return resolve();
+        pc.addEventListener("icegatheringstatechange", () => {
+          if (pc.iceGatheringState === "complete") resolve();
+        });
+        // Fallback timeout
+        setTimeout(resolve, 1000);
+      });
+
+      // Send offer to server
+      let answer;
+      try {
+        const res = await fetch("/api/offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sdp: pc.localDescription.sdp,
+            type: pc.localDescription.type,
+          }),
+        });
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        answer = await res.json();
+      } catch (err) {
+        showError("Could not connect to the bot server. Is it running?");
+        cleanup();
+        return;
+      }
+
+      pcId = answer.pc_id;
+
+      await pc.setRemoteDescription(new RTCSessionDescription({ sdp: answer.sdp, type: answer.type }));
+
+      pc.onconnectionstatechange = () => {
+        if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+          cleanup();
+        }
+      };
+
+      setState(STATE.LISTENING);
+    }
+
+    // ─── Audio level monitor ─────────────────────────────────────────────
+    let _audioCtx = null;
+    let _audioMonitorTimer = null;
+    let _remoteActive = false;
+
+    function _startAudioLevelMonitor(stream) {
+      _audioCtx = new AudioContext();
+      const src = _audioCtx.createMediaStreamSource(stream);
+      const analyser = _audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      let speakingCount = 0;
+      _audioMonitorTimer = setInterval(() => {
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        // Simple threshold — if user's mic is loud, show "listening"
+        if (avg > LOCAL_AUDIO_THRESHOLD) {
+          speakingCount = Math.min(speakingCount + 1, 5);
+        } else {
+          speakingCount = Math.max(speakingCount - 1, 0);
+        }
+
+        if (!_remoteActive) {
+          setState(STATE.LISTENING);
+        }
+      }, 100);
+    }
+
+    // Track remote audio to show "speaking" state
+    // (We use a simple approach: detect when remote track produces audio)
+    function _monitorRemoteAudio(audioEl) {
+      const ctx = new AudioContext();
+      const src = ctx.createMediaElementSource(audioEl);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      src.connect(ctx.destination);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      setInterval(() => {
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        _remoteActive = avg > REMOTE_AUDIO_THRESHOLD;
+        if (state !== STATE.IDLE && state !== STATE.CONNECTING) {
+          setState(_remoteActive ? STATE.SPEAKING : STATE.LISTENING);
+        }
+      }, 80);
+    }
+
+    // ─── Mute toggle ─────────────────────────────────────────────────────
+    function toggleMute() {
+      if (!localStream) return;
+      muted = !muted;
+      localStream.getAudioTracks().forEach(t => t.enabled = !muted);
+      const btn = document.getElementById("muteBtn");
+      btn.classList.toggle("muted", muted);
+      document.getElementById("micIcon").innerHTML = muted
+        ? `<path d="M17.25 12c0 2.9-2.35 5.25-5.25 5.25S6.75 14.9 6.75 12H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-1.75zm-5.25 3.5A3.5 3.5 0 0 1 8.5 12V5a3.5 3.5 0 0 1 7 0v7a3.5 3.5 0 0 1-3.5 3.5zM2.85 3.15L1.44 4.56 10 13.12c.04.2.06.4.06.62.93 0 1.78-.32 2.45-.85l1.46 1.46A5.21 5.21 0 0 1 12 15a5.25 5.25 0 0 1-5.25-5.25H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08a6.99 6.99 0 0 0 5.06-4.43l1.52 1.52 1.41-1.42L2.85 3.15z"/>`
+        : `<path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 13.93A8.001 8.001 0 0 1 4 9H6a6 6 0 0 0 12 0h2a8.001 8.001 0 0 1-7 6.93V19h3v2H8v-2h3v-2.07z"/>`;
+    }
+
+    // ─── End conversation ────────────────────────────────────────────────
+    function endConversation() {
+      cleanup();
+    }
+
+    function cleanup() {
+      if (_audioMonitorTimer) clearInterval(_audioMonitorTimer);
+      if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
+      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+      if (pc) { pc.close(); pc = null; }
+      muted = false;
+      pcId = null;
+      _remoteActive = false;
+      showTranscript("");
+      setState(STATE.IDLE);
+    }
+  </script>
+</body>
+</html>
